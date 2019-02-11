@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
-use Carbon\Carbon;
 use Socialite;
 use Auth;
 use App\User;
@@ -42,44 +41,44 @@ class LoginController extends Controller
     }
 
     /**
-     * Redirect the user to the GitHub authentication page.
+     * Redirect the user to the Socialite provider authentication page.
      *
      * @return \Illuminate\Http\Response
      */
-    public function redirectToProvider()
+    public function redirectToProvider($provider)
     {
-        return Socialite::driver('github')->redirect();
+        return Socialite::driver($provider)->redirect();
     }
 
     /**
-     * Obtain the user information from GitHub.
+     * Obtain the user information from Socialite provider.
      *
      * @return \Illuminate\Http\Response
      */
-    public function handleProviderCallback()
-    {
-        $githubUser = Socialite::driver('github')->user();
+    public function handleProviderCallback($provider)
+    {        
+        if($provider == 'google')
+        {
+            $socialiteUser = Socialite::driver($provider)->stateless()->user();
+        }
+        else
+        {
+            $socialiteUser = Socialite::driver($provider)->user();
+        }
 
-        $user = User::where('provider_id', $githubUser->getId())->first();
-
+        $user = User::where('email', $socialiteUser->getEmail())->first();
+        
         if(!$user)
         {
-            $user = User::create([
-                'name'          => $githubUser->getName() ?? $githubUser->getNickname(),
-                'nickname'      => $githubUser->getNickname() ?? null,
-                'email'         => $githubUser->getEmail(),
-                'password'      => $githubUser->token ?? bcrypt(Carbon::now()),
-                'provider'      => 'github',
-                'provider_id'   => $githubUser->getId(),          
-                'avatar'        => $githubUser->getAvatar() ?? null,
-                'expires_in'    => $githubUser->expiresIn ?? null,
-                'token'         => $githubUser->token ?? null,
-                'token_secret'  => $githubUser->tokenSecret ?? null,
-            ]);
+            $user = User::createSocialiteUser($socialiteUser, $provider);
+        }
+        else 
+        {
+            $user = User::updateSocialiteUser($socialiteUser, $user);
         }
         
         Auth::login($user, true);
-        
+
         return redirect($this->redirectTo);
     }
 }
